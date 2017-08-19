@@ -1,6 +1,5 @@
 var miio = require('miio');
 var Accessory, Service, Characteristic;
-var devices = [];
 
 module.exports = function(homebridge) {
 	Accessory = homebridge.platformAccessory;
@@ -16,12 +15,15 @@ function MiAirPurifier(log, config) {
 	this.showAirQuality = config.showAirQuality || false;
 	this.showTemperature = config.showTemperature || false;
 	this.showHumidity = config.showTemperature || false;
+	this.address = config.address;
+	this.token = config.token;
+	this.model = config.model;
 
 	this.services = [];
 
 	// Modes supported
 	this.modes = [
-		[0, 'idle'], [60, 'auto'], [80, 'silent'], [100, 'favorite']
+		[0, 'idle'], [60, 'silent'], [95, 'favorite'], [100, 'auto']
 	];
 
 	// Air purifier is not available in Homekit yet, register as Fan
@@ -44,7 +46,7 @@ function MiAirPurifier(log, config) {
 	this.serviceInfo
 		.setCharacteristic(Characteristic.Manufacturer, 'Xiaomi')
 		.setCharacteristic(Characteristic.Model, 'Air Purifier');
-	
+
 	this.services.push(this.serviceInfo);
 
 	if(this.showAirQuality){
@@ -85,40 +87,13 @@ MiAirPurifier.prototype = {
 		var accessory = this;
 		var log = this.log;
 
-		log.debug('Discovering Mi air purifier devices...');
-
-		// Discover device in the network
-		var browser = miio.browse();
-		
-		browser.on('available', function(reg){
-			// Skip device without token
-			if(!reg.token)
-				return;
-
-			miio.device(reg).then(function(device){
-				if(device.type != 'air-purifier')
-					return;
-
-				devices[reg.id] = device;
-				accessory.device = device;
-
-				log.debug('Discovered "%s" (ID: %s) on %s:%s.', reg.hostname, device.id, device.address, device.port);
-			});
+		var device = miio.createDevice({
+			address: accessory.address,
+			token: accessory.token,
+			model: accessory.model
 		});
-
-		browser.on('unavailable', function(reg){
-			// Skip device without token
-			if(!reg.token)
-				return;
-
-			var device = devices[reg.id];
-			
-			if(!device)
-				return;
-
-			device.destroy();
-			delete devices[reg.id];
-		});
+		device.init();
+		accessory.device = device;
 	},
 
 	getPowerState: function(callback) {
@@ -188,9 +163,9 @@ MiAirPurifier.prototype = {
 
 		var levels = [
 			[200, Characteristic.AirQuality.POOR],
-			[150, Characteristic.AirQuality.INFERIOR],
-			[100, Characteristic.AirQuality.FAIR],
-			[50, Characteristic.AirQuality.GOOD],
+			[100, Characteristic.AirQuality.INFERIOR],
+			[50, Characteristic.AirQuality.FAIR],
+			[20, Characteristic.AirQuality.GOOD],
 			[0, Characteristic.AirQuality.EXCELLENT],
 		];
 
