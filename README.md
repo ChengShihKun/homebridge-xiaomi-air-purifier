@@ -9,11 +9,11 @@ This is Xiaomi Mi Air Purifier plugin for [Homebridge](https://github.com/nfarin
 ### Features
 
 - Switch on / off.
-
 - Control modes:
   - Auto: Auto Mode on Mi Air Purifier.
   - Manual: Favourite Mode on Mi Air Purifier.
-
+- Change Favourite Mode speed.
+- Switch LED (swing) / buzzer (Lock physical controls)
 - Display temperature.
 - Display humidity.
 - Display air quality.
@@ -49,7 +49,7 @@ This is Xiaomi Mi Air Purifier plugin for [Homebridge](https://github.com/nfarin
 
 ### Known Issues
 
-- Stuck on 'turning off' after turn off the air purifier.
+- Stuck on 'turning off' after turn off the air purifier. It seem to be a bug of homebridge.
 
 ### License
 
