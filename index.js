@@ -69,6 +69,10 @@ function XiaoMiAirPurifier(log, config) {
             .getCharacteristic(Characteristic.AirQuality)
             .on('get', this.getAirQuality.bind(this));
 
+        this.airQualitySensorService
+            .getCharacteristic(Characteristic.PM2_5Density)
+            .on('get', this.getPM2_5Density.bind(this));
+
         this.services.push(this.airQualitySensorService);
     }
 
@@ -189,6 +193,10 @@ XiaoMiAirPurifier.prototype = {
         }
 
         callback(null, quality);
+    },
+
+    getPM2_5Density: function (callback) {
+        callback(null, this.device.aqi);
     },
 
     getCurrentTemperature: function (callback) {
