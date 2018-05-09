@@ -1,7 +1,7 @@
-var miio = require('miio');
-var Service, Characteristic;
+const miio = require('miio');
+let Service, Characteristic;
 
-module.exports = function (homebridge) {
+module.exports = function(homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
 
@@ -41,16 +41,6 @@ function XiaoMiAirPurifier(log, config) {
         .on('get', this.getRotationSpeed.bind(this))
         .on('set', this.setRotationSpeed.bind(this));
 
-    this.airPurifierService
-        .getCharacteristic(Characteristic.SwingMode)
-        .on('get', this.getLED.bind(this))
-        .on('set', this.setLED.bind(this));
-
-    this.airPurifierService
-        .getCharacteristic(Characteristic.LockPhysicalControls)
-        .on('get', this.getBuzzer.bind(this))
-        .on('set', this.setBuzzer.bind(this));
-
     this.services.push(this.airPurifierService);
 
     this.serviceInfo = new Service.AccessoryInformation();
@@ -58,9 +48,23 @@ function XiaoMiAirPurifier(log, config) {
     this.serviceInfo
         .setCharacteristic(Characteristic.Manufacturer, 'Xiaomi')
         .setCharacteristic(Characteristic.Model, 'Air Purifier')
-        .setCharacteristic(Characteristic.SerialNumber, '0799-E5C0-57A641308C0D');;
+        .setCharacteristic(Characteristic.SerialNumber, 'UNKNOWN');;
 
     this.services.push(this.serviceInfo);
+
+    this.lightBulbService = new Service.Lightbulb(this.name + " LED");
+
+    this.lightBulbService
+        .getCharacteristic(Characteristic.On)
+        .on('get', this.getLED.bind(this))
+        .on('set', this.setLED.bind(this));
+
+    this.lightBulbService
+        .getCharacteristic(Characteristic.Brightness)
+        .on('get', this.getLEDBrightness.bind(this))
+        .on('set', this.setLEDBrightness.bind(this));
+
+    this.services.push(this.lightBulbService);
 
     if (this.showAirQuality) {
         this.airQualitySensorService = new Service.AirQualitySensor('Air Quality Sensor');
@@ -96,43 +100,33 @@ function XiaoMiAirPurifier(log, config) {
         this.services.push(this.humiditySensorService);
     }
 
-    this.discover();
+    this.init();
 }
 
 XiaoMiAirPurifier.prototype = {
-    discover: function () {
-        var accessory = this;
-
-        var device = miio.createDevice({
-            address: accessory.address,
-            token: accessory.token,
-            model: accessory.model
+    init: async function() {
+        this.device = await miio.device({
+            address: this.address,
+            token: this.token,
+            model: this.model
         });
-        device.init();
-        accessory.device = device;
     },
 
-    getPowerState: function (callback) {
-        var state = this.device.power
-        if (state) {
-            callback(null, Characteristic.Active.ACTIVE);
-        } else {
-            callback(null, Characteristic.Active.INACTIVE);
-        }
+    getPowerState: async function(callback) {
+        const state = await this.device.power() ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE;
+        callback(null, state);
         this.log.info('getPowerState:', state);
     },
 
-    setPowerState: function (state, callback) {
+    setPowerState: async function(state, callback) {
         this.log.info('setPowerState:', state);
-        this.device.setPower(state === Characteristic.Active.ACTIVE)
-            .then((res) => {
-                this.log.info('setPowerStateResponse:', res);
-                callback();
-            });
+        const res = await this.device.setPower(state === Characteristic.Active.ACTIVE);
+        callback();
+        this.log.info('setPowerStateResponse:', res);
     },
 
-    getCurrentAirPurifierState: function (callback) {
-        var mode = {
+    getCurrentAirPurifierState: async function(callback) {
+        const modeList = {
             idle: Characteristic.CurrentAirPurifierState.INACTIVE,
             silent: Characteristic.CurrentAirPurifierState.IDLE,
             favorite: Characteristic.CurrentAirPurifierState.PURIFYING_AIR,
@@ -141,13 +135,14 @@ XiaoMiAirPurifier.prototype = {
             medium: Characteristic.CurrentAirPurifierState.PURIFYING_AIR,
             high: Characteristic.CurrentAirPurifierState.PURIFYING_AIR,
         };
-        var state = mode[this.device.mode];
-        this.log.info('CurrentAirPurifierState:', this.device.mode, state);
+        const mode = await this.device.mode();
+        const state = modeList[mode];
+        this.log.info('CurrentAirPurifierState:', mode, state);
         callback(null, state);
     },
 
-    getTargetAirPurifierState: function (callback) {
-        var mode = {
+    getTargetAirPurifierState: async function(callback) {
+        const modeList = {
             idle: Characteristic.TargetAirPurifierState.MANUAL,
             silent: Characteristic.TargetAirPurifierState.MANUAL,
             favorite: Characteristic.TargetAirPurifierState.MANUAL,
@@ -156,26 +151,28 @@ XiaoMiAirPurifier.prototype = {
             medium: Characteristic.TargetAirPurifierState.MANUAL,
             high: Characteristic.TargetAirPurifierState.MANUAL,
         };
-        var state = mode[this.device.mode];
-        this.log.info('TargetAirPurifierState:', this.device.mode, state);
+        const mode = await this.device.mode();
+        const state = modeList[mode];
+        this.log.info('TargetAirPurifierState:', mode, state);
         callback(null, state);
     },
 
-    setTargetAirPurifierState: function (state, callback) {
+    setTargetAirPurifierState: async function(state, callback) {
         if (state === Characteristic.TargetAirPurifierState.MANUAL) {
-            this.device.setMode('favorite');
+            await this.device.setMode('favorite');
         } else if (state === Characteristic.TargetAirPurifierState.AUTO) {
-            this.device.setMode('auto');
+            await this.device.setMode('auto');
         }
         callback();
     },
 
-    getCurrentRelativeHumidity: function (callback) {
-        callback(null, this.device.humidity);
+    getCurrentRelativeHumidity: async function(callback) {
+        const humidity = await this.device.relativeHumidity();
+        callback(null, humidity);
     },
 
-    getAirQuality: function (callback) {
-        var levels = [
+    getAirQuality: async function(callback) {
+        const levels = [
             [200, Characteristic.AirQuality.POOR],
             [100, Characteristic.AirQuality.INFERIOR],
             [50, Characteristic.AirQuality.FAIR],
@@ -183,82 +180,93 @@ XiaoMiAirPurifier.prototype = {
             [0, Characteristic.AirQuality.EXCELLENT],
         ];
 
-        var quality = Characteristic.AirQuality.UNKNOWN;
-
-        for (var item of levels) {
-            if (this.device.aqi >= item[0]) {
+        let quality = Characteristic.AirQuality.UNKNOWN;
+        const aqi = await this.device.pm2_5();
+        for (let item of levels) {
+            if (aqi >= item[0]) {
                 quality = item[1];
                 break;
             }
         }
 
         callback(null, quality);
+        this.log.info('getAirQuality:', quality);
     },
 
-    getPM2_5Density: function (callback) {
-        callback(null, this.device.aqi);
+    getPM2_5Density: async function(callback) {
+        const aqi = await this.device.pm2_5();
+        callback(null, aqi);
+        this.log.info('getPM2_5Density:', aqi);
     },
 
-    getCurrentTemperature: function (callback) {
-        callback(null, this.device.temperature);
+    getCurrentTemperature: async function(callback) {
+        const temperature = await this.device.temperature();
+        const celsius = temperature.celsius;
+        callback(null, celsius);
+        this.log.info('getCurrentTemperature:', celsius);
     },
 
-    setRotationSpeed: function (speed, callback) {
-        var level = Math.round(speed / 6.25);
-        this.device.setFavoriteLevel(level)
-            .then(() => {
-                callback();
-            })
+    setRotationSpeed: async function(speed, callback) {
+        const level = Math.round(speed / 6.25);
+        await this.device.setFavoriteLevel(level);
+        callback();
         this.log.info('setRotationSpeed:', speed);
     },
 
-    getRotationSpeed: function (callback) {
-        var level = this.device.favoriteLevel;
-        callback(null, Math.round(level * 6.25));
-        this.log.info('getRotationSpeed:', level);
+    getRotationSpeed: async function(callback) {
+        const level = await this.device.favoriteLevel();
+        const speed = Math.round(level * 6.25);
+        callback(null, speed);
+        this.log.info('getRotationSpeed:', speed);
     },
 
-    setLED: function (led, callback) {
-        this.device.setLed(led === Characteristic.SwingMode.SWING_ENABLED)
-            .then((res) => {
-                this.log.info('setLED:', res);
-                callback();
-            });
+    setLED: async function(state, callback) {
+        await this.device.led(state);
+        callback();
+        this.log.info('setLED:', state);
     },
 
-    getLED: function (callback) {
-        var state = this.device.led;
-        if (state) {
-            callback(null, Characteristic.SwingMode.SWING_ENABLED);
-        } else {
-            callback(null, Characteristic.SwingMode.SWING_DISABLED);
-        }
+    getLED: async function(callback) {
+        const state = await this.device.led();
+        callback(null, state);
         this.log.info('getLED:', state);
     },
 
-    setBuzzer: function (buzzer, callback) {
-        this.device.setBuzzer(buzzer === Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED)
-            .then((res) => {
-                this.log.info('setBuzzer:', res);
+    setLEDBrightness: async function(brightness, callback) {
+        const levels = [
+            [70, 'bright'],
+            [40, 'dim'],
+            [0, 'off'],
+        ];
+
+        for (let item of levels) {
+            if (brightness >= item[0]) {
+                const level = item[1];
+                await this.device.ledBrightness(level)
+                this.log.info('setLEDBrightness:', level);
                 callback();
-            });
-    },
-
-    getBuzzer: function (callback) {
-        var state = this.device.buzzer;
-        if (state) {
-            callback(null, Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED);
-        } else {
-            callback(null, Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED);
+                return;
+            }
         }
-        this.log.info('getBuzzer:', state);
     },
 
-    identify: function (callback) {
+    getLEDBrightness: async function(callback) {
+        const level = await this.device.ledBrightness();
+        const levels = {
+            'bright': 70,
+            'dim': 40,
+            'off': 0,
+        };
+        const state = levels[level];
+        callback(null, state);
+        this.log.info('getLEDBrightness:', state);
+    },
+
+    identify: function(callback) {
         callback();
     },
 
-    getServices: function () {
+    getServices: function() {
         return this.services;
     }
 };
