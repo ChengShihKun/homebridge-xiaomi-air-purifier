@@ -13,10 +13,11 @@ This is Xiaomi Mi Air Purifier plugin for [Homebridge](https://github.com/nfarin
   - Auto: Auto Mode on Mi Air Purifier.
   - Manual: Favourite Mode on Mi Air Purifier.
 - Change Favourite Mode speed.
-- Switch LED (swing) / buzzer (Lock physical controls)
+- Switch LED and brightness
 - Display temperature.
 - Display humidity.
 - Display air quality.
+- Support latest version of [miio](https://github.com/aholstenson/miio).
 
 ### Installation
 
